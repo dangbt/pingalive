@@ -1,0 +1,648 @@
+import { neon } from '@neondatabase/serverless';
+
+export interface Env {
+  DATABASE_URL: string;
+}
+
+type Sql = ReturnType<typeof neon>;
+
+// ─── URL validation ────────────────────────────────────────────────────────────
+const BLOCKED_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '169.254.169.254']);
+const PRIVATE_IP = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/;
+
+function parseUrl(raw: string): URL | null {
+  try {
+    const u = new URL(raw.startsWith('http') ? raw : `https://${raw}`);
+    if (!['http:', 'https:'].includes(u.protocol)) return null;
+    if (BLOCKED_HOSTS.has(u.hostname) || PRIVATE_IP.test(u.hostname)) return null;
+    return u;
+  } catch { return null; }
+}
+
+function validUsername(s: string): boolean {
+  return /^[a-z0-9_]{3,30}$/.test(s);
+}
+
+// ─── Response helpers ──────────────────────────────────────────────────────────
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+function jsonR(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status, headers: { ...CORS, 'Content-Type': 'application/json' },
+  });
+}
+
+// ─── DB helpers ────────────────────────────────────────────────────────────────
+async function getOrCreateUser(sql: Sql, username: string): Promise<number> {
+  const rows = await sql`SELECT id FROM users WHERE username = ${username} LIMIT 1` as { id: number }[];
+  if (rows[0]) return rows[0].id;
+  const [row] = await sql`INSERT INTO users (username) VALUES (${username}) RETURNING id` as { id: number }[];
+  return row.id;
+}
+
+// ─── HTML ──────────────────────────────────────────────────────────────────────
+const HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Keep your Render, Railway, Fly.io free servers awake automatically. No signup, no password.">
+<title>PingAlive — Keep Your Free Server Awake</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#07090f;--surface:rgba(255,255,255,.03);--surface2:rgba(255,255,255,.06);
+  --border:rgba(255,255,255,.07);--border-g:rgba(74,222,128,.35);
+  --green:#4ade80;--green-dim:rgba(74,222,128,.08);
+  --text:#f1f5f9;--muted:#64748b;--danger:#f87171;--danger-dim:rgba(248,113,113,.09);
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;min-height:100vh;line-height:1.6;-webkit-font-smoothing:antialiased}
+
+/* NAV */
+nav{padding:1rem 2rem;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);position:sticky;top:0;backdrop-filter:blur(16px);background:rgba(7,9,15,.88);z-index:100}
+.logo{display:flex;align-items:center;gap:.55rem;font-weight:700;font-size:1.05rem;letter-spacing:-.02em;color:var(--text);text-decoration:none}
+.logo-pulse{width:9px;height:9px;background:var(--green);border-radius:50%;animation:dot-pulse 2s ease-in-out infinite;flex-shrink:0}
+@keyframes dot-pulse{0%,100%{box-shadow:0 0 0 0 rgba(74,222,128,.5)}50%{box-shadow:0 0 0 8px rgba(74,222,128,0)}}
+.nav-right{display:flex;align-items:center;gap:.65rem}
+.nav-badge{font-size:.72rem;font-weight:500;color:var(--green);background:var(--green-dim);border:1px solid rgba(74,222,128,.18);padding:.2rem .65rem;border-radius:999px}
+.nav-username{font-size:.82rem;font-weight:600;color:var(--text)}
+.nav-username::before{content:'@';color:var(--muted);font-weight:400}
+.btn-switch{background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:.28rem .65rem;font-size:.74rem;font-family:inherit;cursor:pointer;transition:all .18s}
+.btn-switch:hover{border-color:rgba(248,113,113,.3);color:var(--danger)}
+
+/* HERO */
+.hero{text-align:center;padding:4.5rem 1rem 2rem;max-width:680px;margin:0 auto}
+.hero-chip{display:inline-flex;align-items:center;gap:.45rem;background:var(--green-dim);border:1px solid rgba(74,222,128,.2);color:var(--green);padding:.3rem .8rem;border-radius:999px;font-size:.76rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;margin-bottom:1.6rem}
+.chip-dot{width:6px;height:6px;background:var(--green);border-radius:50%;animation:dot-pulse 1.5s ease-in-out infinite}
+h1{font-size:clamp(2.2rem,6.5vw,3.6rem);font-weight:800;letter-spacing:-.05em;line-height:1.08;margin-bottom:1.1rem;background:linear-gradient(155deg,#f1f5f9 0%,#94a3b8 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{font-size:1rem;color:var(--muted);max-width:440px;margin:0 auto 2.25rem;line-height:1.75}
+
+/* EKG */
+.ekg-wrap{margin:0 auto 2.25rem;width:200px;height:48px}
+.ekg-bg{fill:var(--green-dim);stroke:rgba(74,222,128,.18);stroke-width:1}
+.ekg-path{fill:none;stroke:var(--green);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:300;stroke-dashoffset:300;animation:ekg-draw 1.6s ease forwards .2s,ekg-loop 3.5s ease 1.8s infinite}
+@keyframes ekg-draw{to{stroke-dashoffset:0}}
+@keyframes ekg-loop{0%,45%{stroke-dashoffset:0;opacity:1}55%,95%{stroke-dashoffset:-300;opacity:0}96%{stroke-dashoffset:300;opacity:0}100%{stroke-dashoffset:0;opacity:1}}
+
+/* STATS */
+.stats-row{display:flex;justify-content:center;align-items:stretch;max-width:360px;margin:0 auto 3rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.stat{flex:1;text-align:center;padding:.85rem 1rem}
+.stat+.stat{border-left:1px solid var(--border)}
+.stat-val{font-size:1.5rem;font-weight:700;color:var(--green);font-variant-numeric:tabular-nums;line-height:1.2}
+.stat-lbl{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-top:.1rem}
+
+/* MAIN */
+.main-wrap{max-width:480px;margin:0 auto;padding:0 1rem 4rem}
+
+/* CARD */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.75rem;margin-bottom:1.25rem}
+.card-title{font-weight:700;font-size:.95rem;letter-spacing:-.01em;margin-bottom:1.4rem;display:flex;align-items:center;gap:.45rem;color:var(--text)}
+.card-title svg{opacity:.5}
+
+/* FORM */
+.form-group{margin-bottom:1rem}
+label{display:block;font-size:.8rem;font-weight:500;color:#cbd5e1;margin-bottom:.4rem}
+.input-wrap{position:relative}
+.input-prefix{position:absolute;left:.85rem;top:50%;transform:translateY(-50%);color:var(--muted);font-size:.83rem;pointer-events:none;user-select:none}
+input[type=text]{width:100%;background:rgba(255,255,255,.045);border:1px solid var(--border);border-radius:8px;padding:.7rem .9rem;color:var(--text);font-size:.9rem;font-family:inherit;transition:border-color .18s,box-shadow .18s;outline:none}
+input.has-pfx{padding-left:2.6rem}
+input[type=text]:focus{border-color:var(--border-g);box-shadow:0 0 0 3px rgba(74,222,128,.09)}
+input::placeholder{color:var(--muted)}
+select{width:100%;background:rgba(255,255,255,.045);border:1px solid var(--border);border-radius:8px;padding:.7rem .9rem;color:var(--text);font-size:.9rem;font-family:inherit;outline:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .85rem center;padding-right:2.5rem;cursor:pointer;transition:border-color .18s,box-shadow .18s}
+select:focus{border-color:var(--border-g);box-shadow:0 0 0 3px rgba(74,222,128,.09)}
+select option{background:#111622;color:var(--text)}
+.form-hint{font-size:.73rem;color:var(--muted);margin-top:.3rem}
+.err{color:var(--danger);font-size:.78rem;margin-top:.4rem;display:none}
+.err.show{display:block}
+
+/* BTN */
+.btn{width:100%;padding:.8rem;background:var(--green);color:#000;border:none;border-radius:8px;font-size:.95rem;font-weight:600;cursor:pointer;font-family:inherit;transition:background .18s,transform .15s,box-shadow .18s;display:flex;align-items:center;justify-content:center;gap:.45rem;letter-spacing:-.01em;margin-top:1.1rem}
+.btn:hover:not(:disabled){background:#22c55e;transform:translateY(-1px);box-shadow:0 6px 24px rgba(74,222,128,.25)}
+.btn:active:not(:disabled){transform:translateY(0)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{width:14px;height:14px;border:2px solid rgba(0,0,0,.2);border-top-color:#000;border-radius:50%;animation:spin .5s linear infinite}
+.free-note{text-align:center;font-size:.73rem;color:var(--muted);margin-top:.75rem}
+.free-note span{margin:0 .3rem}
+
+/* DASHBOARD */
+.dash-intro{font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.85rem}
+
+/* MONITORS */
+.monitors-list{display:flex;flex-direction:column;gap:.55rem}
+.monitor-item{display:flex;align-items:center;gap:.8rem;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.8rem 1rem;transition:border-color .18s}
+.monitor-item:hover{border-color:rgba(255,255,255,.12)}
+.mon-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.mon-dot.ok{background:var(--green);box-shadow:0 0 0 3px rgba(74,222,128,.2)}
+.mon-dot.idle{background:var(--muted)}
+.mon-info{flex:1;min-width:0}
+.mon-url{font-size:.875rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mon-meta{font-size:.72rem;color:var(--muted);margin-top:.1rem}
+.mon-remove{background:none;border:1px solid rgba(248,113,113,.2);color:var(--danger);border-radius:6px;padding:.26rem .6rem;font-size:.72rem;font-family:inherit;cursor:pointer;flex-shrink:0;transition:background .18s}
+.mon-remove:hover{background:var(--danger-dim)}
+.empty-state{text-align:center;padding:2rem 1rem;color:var(--muted);font-size:.875rem;background:var(--surface);border:1px dashed var(--border);border-radius:10px;line-height:1.7}
+.loading-row{text-align:center;padding:1.25rem;color:var(--muted);font-size:.83rem}
+
+/* SECTIONS */
+.section{max-width:700px;margin:3.5rem auto;padding:0 1.25rem}
+.divider{height:1px;background:var(--border);max-width:480px;margin:0 auto 3rem}
+.sec-title{text-align:center;font-size:1.45rem;font-weight:700;letter-spacing:-.04em;margin-bottom:.35rem}
+.sec-sub{text-align:center;color:var(--muted);font-size:.85rem;margin-bottom:1.75rem}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.85rem}
+.step{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.3rem}
+.step-num{width:32px;height:32px;background:var(--green-dim);border:1px solid rgba(74,222,128,.2);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--green);font-weight:700;font-size:.82rem;margin-bottom:.85rem}
+.step-t{font-weight:600;font-size:.88rem;margin-bottom:.25rem}
+.step-d{color:var(--muted);font-size:.8rem;line-height:1.65}
+.platforms{text-align:center;max-width:580px;margin:0 auto 1.5rem;padding:0 1rem}
+.plat-lbl{color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;margin-bottom:.85rem}
+.plat-list{display:flex;flex-wrap:wrap;justify-content:center;gap:.55rem}
+.plat-tag{background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:.32rem .95rem;font-size:.8rem;font-weight:500;color:#94a3b8;transition:border-color .18s,color .18s}
+.plat-tag:hover{border-color:var(--border-g);color:var(--green)}
+footer{border-top:1px solid var(--border);padding:1.25rem;text-align:center;color:var(--muted);font-size:.76rem}
+
+@media(max-width:480px){
+  nav{padding:.85rem 1.1rem}
+  .hero{padding:3rem .9rem 1.5rem}
+  .card{padding:1.35rem}
+  .steps{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="logo" href="/"><span class="logo-pulse"></span>PingAlive</a>
+  <div class="nav-right">
+    <span id="navBadge" class="nav-badge">No signup needed</span>
+    <span id="navUsername" class="nav-username" style="display:none"></span>
+    <button id="navSwitch" class="btn-switch" style="display:none" onclick="switchAccount()">Switch account</button>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-chip"><span class="chip-dot"></span>Automatic ping service</div>
+  <h1>Keep Your Free Server Awake, Forever.</h1>
+  <p class="hero-sub">Free hosting platforms sleep your server after 15 minutes of inactivity. PingAlive pings it on schedule — no more cold starts, no password.</p>
+  <div class="ekg-wrap">
+    <svg viewBox="0 0 200 48" xmlns="http://www.w3.org/2000/svg">
+      <rect class="ekg-bg" x="0" y="0" width="200" height="48" rx="9"/>
+      <path class="ekg-path" d="M8,24 L48,24 L58,11 L66,37 L74,5 L82,43 L90,24 L192,24"/>
+    </svg>
+  </div>
+  <div class="stats-row">
+    <div class="stat"><div class="stat-val" id="statCount">—</div><div class="stat-lbl">Servers monitored</div></div>
+    <div class="stat"><div class="stat-val" id="statPings">—</div><div class="stat-lbl">Total pings sent</div></div>
+  </div>
+</section>
+
+<!-- MAIN -->
+<div class="main-wrap">
+
+  <!-- FORM STATE (no username saved) -->
+  <div id="formState" style="display:none">
+    <div class="card">
+      <div class="card-title">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        Start monitoring — it's free
+      </div>
+      <form id="mainForm" onsubmit="handleMain(event)" novalidate>
+        <div class="form-group">
+          <label for="fUsername">Your username</label>
+          <div class="input-wrap">
+            <span class="input-prefix">@</span>
+            <input type="text" id="fUsername" class="has-pfx" placeholder="your_username" autocomplete="username" spellcheck="false" required>
+          </div>
+          <div class="form-hint">3–30 characters, letters/numbers/underscore. No password needed.</div>
+        </div>
+        <div class="form-group">
+          <label for="fUrl">Server URL</label>
+          <input type="text" id="fUrl" placeholder="https://your-app.onrender.com" autocomplete="off" spellcheck="false" required>
+        </div>
+        <div class="form-group">
+          <label for="fInterval">Ping interval</label>
+          <select id="fInterval">
+            <option value="1">Every 1 minute</option>
+            <option value="5">Every 5 minutes</option>
+            <option value="10">Every 10 minutes</option>
+            <option value="14" selected>Every 14 minutes — Render / Railway</option>
+            <option value="20">Every 20 minutes</option>
+            <option value="30">Every 30 minutes</option>
+            <option value="60">Every 1 hour</option>
+          </select>
+          <div class="form-hint">Render &amp; Railway sleep after 15 min — use 14 min.</div>
+        </div>
+        <div class="err" id="mainErr"></div>
+        <button type="submit" class="btn" id="mainBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          Start Monitoring
+        </button>
+      </form>
+      <p class="free-note">
+        <span>✓ Free forever</span><span>·</span><span>✓ No password</span><span>·</span><span>✓ Any server</span>
+      </p>
+    </div>
+  </div>
+
+  <!-- DASHBOARD STATE (username in localStorage) -->
+  <div id="dashState" style="display:none">
+    <!-- Add monitor -->
+    <div class="card">
+      <div class="card-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add a monitor
+      </div>
+      <form id="addForm" onsubmit="addMonitor(event)" novalidate>
+        <div class="form-group">
+          <label for="aUrl">Server URL</label>
+          <input type="text" id="aUrl" placeholder="https://your-app.onrender.com" autocomplete="off" spellcheck="false" required>
+          <div class="err" id="addErr"></div>
+        </div>
+        <div class="form-group">
+          <label for="aInterval">Ping interval</label>
+          <select id="aInterval">
+            <option value="1">Every 1 minute</option>
+            <option value="5">Every 5 minutes</option>
+            <option value="10">Every 10 minutes</option>
+            <option value="14" selected>Every 14 minutes — Render / Railway</option>
+            <option value="20">Every 20 minutes</option>
+            <option value="30">Every 30 minutes</option>
+            <option value="60">Every 1 hour</option>
+          </select>
+        </div>
+        <button type="submit" class="btn" id="addBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Monitor
+        </button>
+      </form>
+    </div>
+
+    <!-- Monitors list -->
+    <div>
+      <div class="dash-intro" id="monHd">Your monitors</div>
+      <div id="monitorsList"><div class="loading-row">Loading…</div></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- HOW IT WORKS -->
+<div class="section">
+  <h2 class="sec-title">How it works</h2>
+  <p class="sec-sub">Three steps, zero config, zero password.</p>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-t">Pick a username</div>
+      <div class="step-d">Just a handle to identify your monitors. No password, no email required.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-t">Add your server</div>
+      <div class="step-d">Enter your server URL and choose how often you want it pinged.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-t">Stay awake forever</div>
+      <div class="step-d">We send automatic GET requests on your schedule — no cold starts, ever.</div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<div class="platforms">
+  <div class="plat-lbl">Works great with</div>
+  <div class="plat-list">
+    <span class="plat-tag">Render</span>
+    <span class="plat-tag">Railway</span>
+    <span class="plat-tag">Fly.io</span>
+    <span class="plat-tag">Koyeb</span>
+    <span class="plat-tag">Glitch</span>
+    <span class="plat-tag">Replit</span>
+    <span class="plat-tag">Any free tier</span>
+  </div>
+</div>
+
+<footer>Built on Cloudflare Workers &nbsp;·&nbsp; Powered by Neon PostgreSQL &nbsp;·&nbsp; Free forever</footer>
+
+<script>
+(function () {
+  var USERNAME = localStorage.getItem('pa_username');
+
+  // ── Init ───────────────────────────────────────────────
+  loadStats();
+  if (USERNAME) {
+    showDashboard(false);
+  } else {
+    showForm();
+  }
+
+  // ── UI helpers ─────────────────────────────────────────
+  function showForm() {
+    document.getElementById('formState').style.display = '';
+    document.getElementById('dashState').style.display = 'none';
+    document.getElementById('navBadge').style.display = '';
+    document.getElementById('navUsername').style.display = 'none';
+    document.getElementById('navSwitch').style.display = 'none';
+  }
+
+  function showDashboard(scroll) {
+    document.getElementById('formState').style.display = 'none';
+    document.getElementById('dashState').style.display = '';
+    document.getElementById('navBadge').style.display = 'none';
+    document.getElementById('navUsername').style.display = '';
+    document.getElementById('navUsername').textContent = USERNAME;
+    document.getElementById('navSwitch').style.display = '';
+    loadMonitors();
+    if (scroll) window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  window.switchAccount = function () {
+    USERNAME = null;
+    localStorage.removeItem('pa_username');
+    showForm();
+  };
+
+  // ── Main form (first time) ─────────────────────────────
+  window.handleMain = async function (e) {
+    e.preventDefault();
+    var username = document.getElementById('fUsername').value.trim().toLowerCase();
+    var url = document.getElementById('fUrl').value.trim();
+    var interval = parseInt(document.getElementById('fInterval').value);
+    var errEl = document.getElementById('mainErr');
+    errEl.classList.remove('show');
+
+    if (!/^[a-z0-9_]{3,30}$/.test(username)) {
+      showErr(errEl, 'Username: 3–30 chars, letters/numbers/underscore only.'); return;
+    }
+    if (!url) { showErr(errEl, 'Please enter a server URL.'); return; }
+    if (!url.startsWith('http')) url = 'https://' + url;
+
+    var btn = document.getElementById('mainBtn');
+    setLoading(btn, true);
+    try {
+      var r = await fetch('/api/monitors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, url, interval }),
+      });
+      var d = await r.json();
+      if (!r.ok || d.error) { showErr(errEl, d.error || 'Something went wrong.'); return; }
+      USERNAME = username;
+      localStorage.setItem('pa_username', USERNAME);
+      document.getElementById('mainForm').reset();
+      showDashboard(true);
+      loadStats();
+    } catch (_) { showErr(errEl, 'Network error. Try again.'); }
+    finally { setLoading(btn, false); }
+  };
+
+  // ── Add monitor (dashboard) ────────────────────────────
+  window.addMonitor = async function (e) {
+    e.preventDefault();
+    var url = document.getElementById('aUrl').value.trim();
+    var interval = parseInt(document.getElementById('aInterval').value);
+    var errEl = document.getElementById('addErr');
+    errEl.classList.remove('show');
+
+    if (!url) { showErr(errEl, 'Please enter a URL.'); return; }
+    if (!url.startsWith('http')) url = 'https://' + url;
+
+    var btn = document.getElementById('addBtn');
+    setLoading(btn, true);
+    try {
+      var r = await fetch('/api/monitors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: USERNAME, url, interval }),
+      });
+      var d = await r.json();
+      if (!r.ok || d.error) { showErr(errEl, d.error || 'Failed to add monitor.'); return; }
+      document.getElementById('addForm').reset();
+      loadMonitors();
+      loadStats();
+    } catch (_) { showErr(errEl, 'Network error. Try again.'); }
+    finally { setLoading(btn, false); }
+  };
+
+  // ── Remove monitor ─────────────────────────────────────
+  window.removeMonitor = async function (id) {
+    if (!confirm('Remove this monitor?')) return;
+    try {
+      await fetch('/api/monitors/' + id + '?username=' + encodeURIComponent(USERNAME), { method: 'DELETE' });
+      loadMonitors();
+      loadStats();
+    } catch (_) {}
+  };
+
+  // ── Load monitors ──────────────────────────────────────
+  async function loadMonitors() {
+    document.getElementById('monitorsList').innerHTML = '<div class="loading-row">Loading…</div>';
+    try {
+      var r = await fetch('/api/monitors?username=' + encodeURIComponent(USERNAME));
+      var d = await r.json();
+      renderMonitors(d.monitors || []);
+    } catch (_) { renderMonitors([]); }
+  }
+
+  function renderMonitors(list) {
+    var hd = document.getElementById('monHd');
+    var el = document.getElementById('monitorsList');
+    hd.textContent = 'Your monitors (' + list.length + ')';
+    if (!list.length) {
+      el.innerHTML = '<div class="empty-state">No monitors yet.<br>Add your first server URL above to get started.</div>';
+      return;
+    }
+    el.innerHTML = '<div class="monitors-list">' + list.map(function (m) {
+      var healthy = m.last_ping && (Date.now() - new Date(m.last_ping).getTime()) < m.interval_minutes * 60000 * 1.8;
+      return '<div class="monitor-item">' +
+        '<span class="mon-dot ' + (healthy ? 'ok' : 'idle') + '"></span>' +
+        '<div class="mon-info">' +
+          '<div class="mon-url">' + esc(m.url) + '</div>' +
+          '<div class="mon-meta">Every ' + m.interval_minutes + 'm &nbsp;&middot;&nbsp; ' +
+            Number(m.ping_count).toLocaleString() + ' pings &nbsp;&middot;&nbsp; ' + ago(m.last_ping) +
+          '</div>' +
+        '</div>' +
+        '<button class="mon-remove" data-id="' + esc(m.id) + '" onclick="removeMonitor(this.dataset.id)">Remove</button>' +
+      '</div>';
+    }).join('') + '</div>';
+  }
+
+  // ── Stats ──────────────────────────────────────────────
+  async function loadStats() {
+    try {
+      var r = await fetch('/api/stats');
+      var d = await r.json();
+      animNum(document.getElementById('statCount'), d.count || 0);
+      animNum(document.getElementById('statPings'), d.totalPings || 0);
+    } catch (_) {
+      document.getElementById('statCount').textContent = '0';
+      document.getElementById('statPings').textContent = '0';
+    }
+  }
+
+  // ── Helpers ────────────────────────────────────────────
+  function ago(iso) {
+    if (!iso) return 'Never pinged';
+    var s = (Date.now() - new Date(iso).getTime()) / 1000;
+    if (s < 60) return 'Just now';
+    if (s < 3600) return Math.floor(s / 60) + 'm ago';
+    if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+    return Math.floor(s / 86400) + 'd ago';
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function showErr(el, msg) { el.textContent = msg; el.classList.add('show'); }
+
+  function setLoading(btn, on) {
+    btn.disabled = on;
+    if (on) {
+      btn.innerHTML = '<span class="spinner"></span> Please wait…';
+    } else {
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> ' + (btn.id === 'addBtn' ? 'Add Monitor' : 'Start Monitoring');
+    }
+  }
+
+  function animNum(el, target) {
+    var dur = 800, step = 16, t = 0;
+    var timer = setInterval(function () {
+      t += step;
+      el.textContent = Math.round(Math.min(t / dur, 1) * target).toLocaleString();
+      if (t >= dur) clearInterval(timer);
+    }, step);
+  }
+})();
+</script>
+</body>
+</html>`;
+
+// ─── Worker ────────────────────────────────────────────────────────────────────
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url);
+    const { pathname, method } = url;
+
+    if (method === 'OPTIONS') return new Response(null, { headers: CORS });
+    if (pathname === '/') return new Response(HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+
+    const sql = neon(env.DATABASE_URL);
+
+    // ── DB init — call once after deploy: GET /api/init ───────────────────────
+    if (pathname === '/api/init' && method === 'GET') {
+      await sql`CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username VARCHAR(50) UNIQUE NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )`;
+      await sql`CREATE TABLE IF NOT EXISTS monitors (
+        id VARCHAR(20) PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        url TEXT NOT NULL,
+        interval_minutes INTEGER NOT NULL DEFAULT 14,
+        last_ping TIMESTAMPTZ,
+        ping_count INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        active BOOLEAN DEFAULT TRUE
+      )`;
+      return jsonR({ ok: true, message: 'Tables ready' });
+    }
+
+    // ── Stats ─────────────────────────────────────────────────────────────────
+    if (pathname === '/api/stats' && method === 'GET') {
+      const [{ count }] = await sql`SELECT COUNT(*) AS count FROM monitors WHERE active = true` as { count: string }[];
+      const [{ total }] = await sql`SELECT COALESCE(SUM(ping_count), 0) AS total FROM monitors` as { total: string }[];
+      return jsonR({ count: Number(count), totalPings: Number(total) });
+    }
+
+    // ── List monitors by username ─────────────────────────────────────────────
+    if (pathname === '/api/monitors' && method === 'GET') {
+      const username = url.searchParams.get('username')?.trim().toLowerCase() ?? '';
+      if (!validUsername(username)) return jsonR({ error: 'Invalid username' }, 400);
+
+      const monitors = await sql`
+        SELECT m.id, m.url, m.interval_minutes, m.last_ping, m.ping_count
+        FROM monitors m
+        JOIN users u ON u.id = m.user_id
+        WHERE u.username = ${username} AND m.active = true
+        ORDER BY m.created_at DESC
+      `;
+      return jsonR({ monitors });
+    }
+
+    // ── Add monitor ───────────────────────────────────────────────────────────
+    if (pathname === '/api/monitors' && method === 'POST') {
+      let body: { username?: string; url?: string; interval?: number };
+      try { body = await request.json(); } catch { return jsonR({ error: 'Invalid JSON' }, 400); }
+
+      const username = (body.username ?? '').trim().toLowerCase();
+      if (!validUsername(username)) return jsonR({ error: 'Username: 3–30 chars, letters/numbers/underscore only.' }, 400);
+
+      const parsedUrl = parseUrl(body.url ?? '');
+      if (!parsedUrl) return jsonR({ error: 'Invalid or disallowed URL.' }, 400);
+
+      const interval = Number(body.interval);
+      if (!Number.isInteger(interval) || interval < 1 || interval > 60)
+        return jsonR({ error: 'Interval must be 1–60 minutes.' }, 400);
+
+      const userId = await getOrCreateUser(sql, username);
+
+      const [{ cnt }] = await sql`SELECT COUNT(*) AS cnt FROM monitors WHERE user_id = ${userId} AND active = true` as { cnt: string }[];
+      if (Number(cnt) >= 20) return jsonR({ error: 'Maximum 20 monitors per username.' }, 429);
+
+      const dup = await sql`SELECT id FROM monitors WHERE user_id = ${userId} AND url = ${parsedUrl.href} AND active = true LIMIT 1`;
+      if (dup.length) return jsonR({ error: 'This URL is already being monitored.' }, 409);
+
+      const id = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6);
+      await sql`INSERT INTO monitors (id, user_id, url, interval_minutes) VALUES (${id}, ${userId}, ${parsedUrl.href}, ${interval})`;
+      return jsonR({ ok: true, id });
+    }
+
+    // ── Remove monitor ────────────────────────────────────────────────────────
+    if (pathname.startsWith('/api/monitors/') && method === 'DELETE') {
+      const username = url.searchParams.get('username')?.trim().toLowerCase() ?? '';
+      if (!validUsername(username)) return jsonR({ error: 'Invalid username' }, 400);
+
+      const id = pathname.slice('/api/monitors/'.length);
+      await sql`
+        UPDATE monitors SET active = false
+        WHERE id = ${id}
+        AND user_id = (SELECT id FROM users WHERE username = ${username} LIMIT 1)
+      `;
+      return jsonR({ ok: true });
+    }
+
+    return new Response('Not found', { status: 404 });
+  },
+
+  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil((async () => {
+      const sql = neon(env.DATABASE_URL);
+      const monitors = await sql`
+        SELECT id, url, interval_minutes FROM monitors
+        WHERE active = true
+        AND (last_ping IS NULL OR last_ping < NOW() - (interval_minutes::text || ' minutes')::INTERVAL)
+      ` as { id: string; url: string; interval_minutes: number }[];
+
+      await Promise.allSettled(monitors.map(async m => {
+        try {
+          await fetch(m.url, {
+            method: 'GET',
+            headers: { 'User-Agent': 'PingAlive/1.0 (+https://pingalive.workers.dev)' },
+            signal: AbortSignal.timeout(12_000),
+          });
+          await sql`UPDATE monitors SET last_ping = NOW(), ping_count = ping_count + 1 WHERE id = ${m.id}`;
+        } catch { /* retry next cron tick */ }
+      }));
+    })());
+  },
+};
