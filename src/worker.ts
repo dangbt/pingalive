@@ -48,6 +48,7 @@ const HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script>document.documentElement.setAttribute('data-theme',localStorage.getItem('pa_theme')||(matchMedia('(prefers-color-scheme:light)').matches?'light':'dark'));</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <!-- Primary SEO -->
@@ -90,8 +91,19 @@ const HTML = `<!DOCTYPE html>
   --green:#4ade80;--green-dim:rgba(74,222,128,.08);
   --text:#f1f5f9;--muted:#64748b;--danger:#f87171;--danger-dim:rgba(248,113,113,.09);
 }
+[data-theme="light"]{
+  --bg:#f8fafc;--surface:rgba(0,0,0,.04);--surface2:rgba(0,0,0,.07);
+  --border:rgba(0,0,0,.09);--border-g:rgba(22,163,74,.4);
+  --green:#16a34a;--green-dim:rgba(22,163,74,.08);
+  --text:#0f172a;--muted:#64748b;--danger:#dc2626;--danger-dim:rgba(220,38,38,.08);
+}
+[data-theme="light"] nav{background:rgba(248,250,252,.92)}
+[data-theme="light"] input[type=text],[data-theme="light"] select{background:rgba(0,0,0,.04)}
+[data-theme="light"] select option{background:#f8fafc;color:#0f172a}
+[data-theme="light"] h1{background:linear-gradient(155deg,#0f172a 0%,#475569 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+[data-theme="light"] .btn:hover:not(:disabled){background:#15803d;box-shadow:0 6px 24px rgba(22,163,74,.25)}
 html{scroll-behavior:smooth}
-body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;min-height:100vh;line-height:1.6;-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;min-height:100vh;line-height:1.6;-webkit-font-smoothing:antialiased;transition:background-color .2s,color .2s}
 
 /* NAV */
 nav{padding:1rem 2rem;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);position:sticky;top:0;backdrop-filter:blur(16px);background:rgba(7,9,15,.88);z-index:100}
@@ -104,6 +116,8 @@ nav{padding:1rem 2rem;display:flex;align-items:center;justify-content:space-betw
 .nav-username::before{content:'@';color:var(--muted);font-weight:400}
 .btn-switch{background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:.28rem .65rem;font-size:.74rem;font-family:inherit;cursor:pointer;transition:all .18s}
 .btn-switch:hover{border-color:rgba(248,113,113,.3);color:var(--danger)}
+.btn-theme{background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .18s;flex-shrink:0}
+.btn-theme:hover{border-color:var(--border-g);color:var(--green)}
 
 /* HERO */
 .hero{text-align:center;padding:4.5rem 1rem 2rem;max-width:680px;margin:0 auto}
@@ -231,6 +245,7 @@ footer{border-top:1px solid var(--border);padding:1.25rem;text-align:center;colo
     <span id="navBadge" class="nav-badge">No signup needed</span>
     <span id="navUsername" class="nav-username" style="display:none"></span>
     <button id="navSwitch" class="btn-switch" style="display:none" onclick="switchAccount()">Switch account</button>
+    <button id="themeBtn" class="btn-theme" onclick="toggleTheme()" aria-label="Toggle theme"></button>
   </div>
 </nav>
 
@@ -384,6 +399,20 @@ footer{border-top:1px solid var(--border);padding:1.25rem;text-align:center;colo
 <script>
 (function () {
   var USERNAME = localStorage.getItem('pa_username');
+
+  // ── Theme ──────────────────────────────────────────────
+  var SUN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
+  var MOON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+  function updateThemeIcon() {
+    document.getElementById('themeBtn').innerHTML = document.documentElement.getAttribute('data-theme') === 'light' ? MOON : SUN;
+  }
+  window.toggleTheme = function() {
+    var next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('pa_theme', next);
+    updateThemeIcon();
+  };
+  updateThemeIcon();
 
   // ── Init ───────────────────────────────────────────────
   loadStats();
