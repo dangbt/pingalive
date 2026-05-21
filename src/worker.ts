@@ -49,8 +49,35 @@ const HTML = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="Keep your Render, Railway, Fly.io free servers awake automatically. No signup, no password.">
+
+<!-- Primary SEO -->
 <title>PingAlive — Keep Your Free Server Awake</title>
+<meta name="description" content="Keep your Render, Railway, Fly.io free servers awake with automatic pings every minute. No signup, no password — free forever.">
+<meta name="keywords" content="keep server awake, prevent server sleep, render ping, railway ping, fly.io uptime, free server monitoring, uptime monitor, server keep-alive, cloudflare workers">
+<meta name="author" content="PingAlive">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="__ORIGIN__">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="__ORIGIN__">
+<meta property="og:title" content="PingAlive — Keep Your Free Server Awake">
+<meta property="og:description" content="Automatic pings for Render, Railway, Fly.io free servers. No signup, no password — free forever.">
+<meta property="og:image" content="__ORIGIN__/og">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="PingAlive — Keep Your Free Server Awake, Forever">
+<meta property="og:site_name" content="PingAlive">
+<meta property="og:locale" content="en_US">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="PingAlive — Keep Your Free Server Awake">
+<meta name="twitter:description" content="Automatic pings for Render, Railway, Fly.io free servers. No signup, no password — free forever.">
+<meta name="twitter:image" content="__ORIGIN__/og">
+<meta name="twitter:image:alt" content="PingAlive — Keep Your Free Server Awake, Forever">
+
+<!-- Favicon -->
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -175,6 +202,26 @@ footer{border-top:1px solid var(--border);padding:1.25rem;text-align:center;colo
   .steps{grid-template-columns:1fr}
 }
 </style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "PingAlive",
+  "url": "__ORIGIN__",
+  "description": "Keep your Render, Railway, Fly.io free servers awake with automatic pings every minute. No signup, no password — free forever.",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Any",
+  "browserRequirements": "Requires JavaScript",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "featureList": [
+    "Automatic scheduled pings",
+    "No signup or password required",
+    "Up to 20 monitors per user",
+    "1 to 60 minute ping intervals",
+    "Works with Render, Railway, Fly.io, Koyeb, Glitch, Replit"
+  ]
+}
+</script>
 </head>
 <body>
 
@@ -549,6 +596,46 @@ const ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
   <circle cx="50" cy="50" r="3"  fill="#bbf7d0"/>
 </svg>`;
 
+// ─── OG Image (1200×630) ──────────────────────────────────────────────────────
+const OG_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif">
+  <defs>
+    <radialGradient id="rg" cx="78%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#4ade80" stop-opacity="0.07"/>
+      <stop offset="100%" stop-color="#07090f" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="630" fill="#07090f"/>
+  <rect width="1200" height="630" fill="url(#rg)"/>
+  <rect width="1200" height="2" fill="#4ade80" opacity="0.12"/>
+  <circle cx="920" cy="315" r="260" fill="none" stroke="#4ade80" stroke-width="1"   opacity="0.05"/>
+  <circle cx="920" cy="315" r="200" fill="none" stroke="#4ade80" stroke-width="1.5" opacity="0.1"/>
+  <circle cx="920" cy="315" r="140" fill="none" stroke="#4ade80" stroke-width="2"   opacity="0.2"/>
+  <circle cx="920" cy="315" r="85"  fill="none" stroke="#4ade80" stroke-width="3"   opacity="0.36"/>
+  <circle cx="920" cy="315" r="40"  fill="none" stroke="#4ade80" stroke-width="4"   opacity="0.55"/>
+  <circle cx="920" cy="315" r="20"  fill="#4ade80" opacity="0.14"/>
+  <circle cx="920" cy="315" r="13"  fill="#4ade80" filter="url(#glow)"/>
+  <circle cx="920" cy="315" r="8"   fill="#bbf7d0"/>
+  <circle cx="72" cy="74" r="8" fill="#4ade80"/>
+  <text x="92" y="82" font-size="26" font-weight="700" fill="#f1f5f9" letter-spacing="-0.5">PingAlive</text>
+  <rect x="66" y="128" width="200" height="34" rx="17" fill="rgba(74,222,128,0.08)" stroke="rgba(74,222,128,0.25)" stroke-width="1.5"/>
+  <circle cx="91" cy="145" r="5" fill="#4ade80"/>
+  <text x="104" y="151" font-size="13" font-weight="600" fill="#4ade80" letter-spacing="1">AUTOMATIC PING</text>
+  <text x="66" y="265" font-size="76" font-weight="800" fill="#f1f5f9"  letter-spacing="-3">Keep Your Free</text>
+  <text x="66" y="355" font-size="76" font-weight="800" fill="#4ade80" letter-spacing="-3">Server Awake.</text>
+  <text x="66" y="416" font-size="23" fill="#475569" letter-spacing="-0.3">Render · Railway · Fly.io · Koyeb · Any free tier</text>
+  <circle cx="76"  cy="481" r="4" fill="#4ade80"/>
+  <text x="91"  y="487" font-size="20" fill="#94a3b8">No signup</text>
+  <circle cx="228" cy="481" r="4" fill="#4ade80"/>
+  <text x="243" y="487" font-size="20" fill="#94a3b8">No password</text>
+  <circle cx="400" cy="481" r="4" fill="#4ade80"/>
+  <text x="415" y="487" font-size="20" fill="#94a3b8">Free forever</text>
+  <text x="66" y="578" font-size="16" fill="#334155">pingalive.workers.dev</text>
+</svg>`;
+
 // ─── Worker ────────────────────────────────────────────────────────────────────
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -557,9 +644,26 @@ export default {
     const { method } = request;
 
     if (method === 'OPTIONS') return new Response(null, { headers: CORS });
+
     if (pathname === '/favicon.svg' || pathname === '/icon.svg')
       return new Response(ICON_SVG, { headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=604800' } });
-    if (pathname === '/') return new Response(HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+
+    if (pathname === '/og')
+      return new Response(OG_SVG, { headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' } });
+
+    if (pathname === '/robots.txt')
+      return new Response('User-agent: *\nAllow: /\nSitemap: ' + url.origin + '/sitemap.xml\n', {
+        headers: { 'Content-Type': 'text/plain', 'Cache-Control': 'public, max-age=86400' },
+      });
+
+    if (pathname === '/sitemap.xml')
+      return new Response(
+        `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${url.origin}/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>\n</urlset>`,
+        { headers: { 'Content-Type': 'application/xml', 'Cache-Control': 'public, max-age=86400' } },
+      );
+
+    if (pathname === '/')
+      return new Response(HTML.replace(/__ORIGIN__/g, url.origin), { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 
     const sql = neon(env.DATABASE_URL);
 
