@@ -51,6 +51,8 @@ const HTML = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="Keep your Render, Railway, Fly.io free servers awake automatically. No signup, no password.">
 <title>PingAlive — Keep Your Free Server Awake</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -526,6 +528,27 @@ footer{border-top:1px solid var(--border);padding:1.25rem;text-align:center;colo
 </body>
 </html>`;
 
+// ─── Icon ──────────────────────────────────────────────────────────────────────
+const ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="3.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <radialGradient id="bg" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#0e1420"/>
+      <stop offset="100%" stop-color="#07090f"/>
+    </radialGradient>
+  </defs>
+  <rect width="100" height="100" rx="22" fill="url(#bg)"/>
+  <circle cx="50" cy="50" r="40" fill="none" stroke="#4ade80" stroke-width="1.5" opacity="0.08"/>
+  <circle cx="50" cy="50" r="28" fill="none" stroke="#4ade80" stroke-width="2"   opacity="0.22"/>
+  <circle cx="50" cy="50" r="16" fill="none" stroke="#4ade80" stroke-width="3"   opacity="0.45"/>
+  <circle cx="50" cy="50" r="7"  fill="#4ade80" opacity="0.18"/>
+  <circle cx="50" cy="50" r="5"  fill="#4ade80" filter="url(#glow)"/>
+  <circle cx="50" cy="50" r="3"  fill="#bbf7d0"/>
+</svg>`;
+
 // ─── Worker ────────────────────────────────────────────────────────────────────
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -534,6 +557,8 @@ export default {
     const { method } = request;
 
     if (method === 'OPTIONS') return new Response(null, { headers: CORS });
+    if (pathname === '/favicon.svg' || pathname === '/icon.svg')
+      return new Response(ICON_SVG, { headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=604800' } });
     if (pathname === '/') return new Response(HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
 
     const sql = neon(env.DATABASE_URL);
