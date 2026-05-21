@@ -530,7 +530,8 @@ footer{border-top:1px solid var(--border);padding:1.25rem;text-align:center;colo
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    const { pathname, method } = url;
+    const { pathname } = url;
+    const { method } = request;
 
     if (method === 'OPTIONS') return new Response(null, { headers: CORS });
     if (pathname === '/') return new Response(HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
