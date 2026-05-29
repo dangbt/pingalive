@@ -692,7 +692,7 @@ export default {
       );
 
     if (pathname === '/')
-      return new Response(HTML.replace(/__ORIGIN__/g, url.origin), { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+      return Response.redirect('https://pingalive-ui.pages.dev', 302);
 
     const sql = neon(env.DATABASE_URL);
 

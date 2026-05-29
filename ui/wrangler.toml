@@ -1,0 +1,8 @@
+name = "pingalive"
+pages_build_output_dir = "./dist"
+
+[vars]
+VITE_API_URL = "https://pingalive.buitandang96.workers.dev"
+
+[env.production.vars]
+VITE_API_URL = "https://pingalive.buitandang96.workers.dev"

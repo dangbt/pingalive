@@ -1,0 +1,31 @@
+@import "tailwindcss";
+@import "@dangbt/pro-ui/theme.css";
+@source "../node_modules/@dangbt/pro-ui/src";
+@plugin "tailwindcss-react-aria-components";
+
+/* ── Project tokens ── */
+:root {
+  --primary:     #4ade80;
+  --base-radius: 8px;
+
+  /* Softer light theme (override theme.css defaults) */
+  --canvas:  #f1f5f9;  /* slate-100 — page bg */
+  --surface: #ffffff;  /* cards stay white     */
+  --border:  #e2e8f0;  /* slate-200            */
+}
+
+/*
+  Re-declare dark values AFTER :root so they win the cascade.
+  (Same specificity as :root — last declaration wins.)
+*/
+.dark {
+  --canvas:         #0f172a;
+  --surface:        #1e293b;
+  --surface-subtle: #0f172a;
+  --surface-raised: #334155;
+  --border:         #334155;
+  --fg:             #f1f5f9;
+  --fg-2:           #cbd5e1;
+  --fg-muted:       #94a3b8;
+  --fg-disabled:    #475569;
+}
