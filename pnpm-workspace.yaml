@@ -1,4 +1,10 @@
+packages:
+  - ui
+
 allowBuilds:
   esbuild: false
   sharp: false
   workerd: false
+
+minimumReleaseAgeExclude:
+  - '@dangbt/pro-ui@1.12.0'
