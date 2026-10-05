@@ -134,7 +134,7 @@ function ThemeIsland() {
           <p className="text-xs font-semibold text-fg-muted uppercase tracking-wider mb-2">Accent</p>
           <ColorSwatchPicker
             value={primary}
-            onChange={(c: any) => applyPrimary(c.toString('hex'))}
+            onChange={(c) => applyPrimary(c.toString('hex'))}
             colors={ACCENT_PRESETS}
             swatchSize="md"
           />
@@ -208,8 +208,8 @@ function Landing({ onStart }: { onStart: (u: string) => void }) {
         })
         if (!res.ok) throw new Error(await res.text())
         toast.success('Monitor added!')
-      } catch (err: any) {
-        toast.error(err.message || 'Failed to add monitor')
+      } catch (err) {
+        toast.error(err instanceof Error && err.message ? err.message : 'Failed to add monitor')
         setLoading(false)
         return
       }
@@ -353,6 +353,8 @@ function Dashboard({ username, onLogout }: { username: string; onLogout: () => v
   }, [username])
 
   useEffect(() => {
+    // Initial data load; fetchAll sets loading state before awaiting the request.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAll()
     const id = setInterval(() => fetchAll(true), 30_000)
     return () => clearInterval(id)
@@ -373,8 +375,8 @@ function Dashboard({ username, onLogout }: { username: string; onLogout: () => v
       setNewUrl('')
       setNewInterval(5)
       fetchAll(true)
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to add')
+    } catch (err) {
+      toast.error(err instanceof Error && err.message ? err.message : 'Failed to add')
     } finally {
       setAdding(false)
     }
